@@ -1,0 +1,65 @@
+name: Build & deploy
+
+# Publishes the board to GitHub Pages.
+# - on every push to main
+# - every 15 minutes during the US session (13:00–21:59 UTC, Mon–Fri) so the US board stays fresh
+# - once after the close, so the full session is kept overnight and through the weekend
+# Crypto needs no schedule: it is read live in each visitor's browser.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '*/15 13-21 * * 1-5'
+    - cron: '20 22 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build the US market file
+        id: us
+        continue-on-error: true
+        run: npm run data:us
+      - name: Keep the last good US file if this run could not build one
+        if: steps.us.outcome != 'success'
+        run: |
+          mkdir -p public/data
+          curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/us.json" -o public/data/us.json \
+            || echo "No previous US file; the page will show the demo session."
+      - name: Build the site
+        run: npm run build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

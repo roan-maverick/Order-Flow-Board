@@ -1,0 +1,7 @@
+node_modules
+dist
+*.log
+.DS_Store
+.env
+# built in CI by scripts/build-us-data.mjs
+public/data/us.json
