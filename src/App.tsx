@@ -188,7 +188,7 @@ export function App() {
             : 'US stocks have no single-stock futures, so build-up reads price against relative volume (today’s volume against its usual pace for the time of day). Levels are the heaviest listed option open interest: put wall below, call wall above.'}
         </p>
         <p className="muted">
-          Data: {market === 'crypto' ? 'Binance / Bybit public APIs, Deribit options (BTC, ETH), read live in your browser.' : 'Yahoo Finance 5-minute bars and Cboe delayed options, refreshed every 15 minutes in market hours.'} Readings, not investment advice.
+          Data: {market === 'crypto' ? 'Binance / Bybit public APIs, Deribit options (BTC, ETH), read live in your browser.' : 'Yahoo Finance 5-minute bars and Cboe delayed options, built locally with npm run data:us.'} Readings, not investment advice.
           {' '}Open source (MIT) at <a href={BRAND.repoUrl} target="_blank" rel="noreferrer">{BRAND.repoUrl.replace('https://', '')}</a>.
           {' '}Board concept inspired by <a href="https://github.com/MrChartist/order-flow" target="_blank" rel="noreferrer">Order Flow</a> by Mr. Chartist for Indian F&amp;O.
         </p>

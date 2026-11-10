@@ -11,7 +11,7 @@ Bulls rise above the zero line, bears fall below it, and every name runs on its 
 
 **Free · open source (MIT) · no keys · no sign-up**
 
-[Open the live board](https://roan-maverick.github.io/order-flow-open/) · [Run it yourself](#run-it-yourself) · [How to read it](#reading-the-board) · [Data](#where-the-data-comes-from)
+[Run it yourself](#run-it-yourself) · [How to read it](#reading-the-board) · [Data](#where-the-data-comes-from)
 
 </div>
 
@@ -26,7 +26,7 @@ Bulls rise above the zero line, bears fall below it, and every name runs on its 
   </tr>
 </table>
 
-<sub>Screenshots show the built-in demo market. On the live site the crypto board reads the exchanges in real time and the US board refreshes every 15 minutes in market hours.</sub>
+<sub>Screenshots show the built-in demo market. When you run it, the crypto board reads the exchanges in real time and the US board uses the file you build with `npm run data:us`.</sub>
 
 ## Why
 
@@ -61,13 +61,7 @@ npm run data:us        # writes public/data/us.json (Yahoo Finance bars + Cboe o
 | A production build | `npm run build` → `dist/` (any static host) |
 | Tests | `npm test` |
 
-### Put it online for free (GitHub Pages)
-
-1. Push this repo to GitHub.
-2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-3. That's it. `.github/workflows/deploy.yml` builds and publishes on every push, and every 15 minutes during the US session, so the US board stays fresh. The site appears at `https://<you>.github.io/<repo>/`.
-
-No server and no keys: crypto is read live in each visitor's browser, and the US file is rebuilt by the workflow.
+No server and no keys: crypto is read live in your browser, and the US file is a local JSON file you rebuild whenever you want fresh data.
 
 ## Reading the board
 
@@ -111,7 +105,7 @@ Each card's dots show which hold (filled), which fail (hollow) and which can't b
 |---|---|---|
 | Crypto | [Binance USDⓈ-M futures](https://developers.binance.com/docs/derivatives/usds-margined-futures/general-info) public API: 5-minute klines with taker volume, 5-minute open-interest history, funding. Falls back to [Bybit](https://bybit-exchange.github.io/docs/v5/intro) where Binance is blocked. | Every minute, in the visitor's browser |
 | Crypto levels | [Deribit](https://docs.deribit.com/) option open interest for BTC and ETH (expiries in the next 35 days) | On load |
-| US stocks | Yahoo Finance 5-minute bars; Cboe delayed option quotes (open interest by strike, call/put volume) | Every 15 min in market hours (GitHub Actions) |
+| US stocks | Yahoo Finance 5-minute bars; Cboe delayed option quotes (open interest by strike, call/put volume) Whenever you run `npm run data:us` |
 
 If no live source answers (offline, or a network that blocks the exchanges), the board says so and shows the built-in **demo market**: a deterministic simulation with a market mood, sector moods and positioning that mostly agrees with the move. Demo prices are not quotes.
 

@@ -1,8 +1,8 @@
 import type { MarketData } from './types';
 
 /**
- * US stocks come from a file the site's build step writes (scripts/build-us-data.mjs,
- * run by GitHub Actions every 15 minutes in market hours): 5-minute bars,
+ * US stocks come from a local file written by scripts/build-us-data.mjs
+ * (`npm run data:us`): 5-minute bars,
  * relative volume and option open interest by strike for each name.
  */
 export async function loadUs(): Promise<MarketData> {

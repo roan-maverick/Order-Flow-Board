@@ -11,8 +11,8 @@
  *   - option open interest by strike for expiries in the next 35 days, and today's
  *     call and put volume (Cboe's delayed quotes)
  *
- * Runs in GitHub Actions on a schedule (see .github/workflows/deploy.yml), so the
- * published page always has a recent file. Data is delayed and for information only;
+ * Run it whenever you want a fresh US session; the page reads the file it writes.
+ * Data is delayed and for information only;
  * check the providers' terms before using it for anything else.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
