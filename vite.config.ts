@@ -6,5 +6,4 @@ export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   plugins: [react()],
   server: { port: 5199, host: '127.0.0.1' },
-  test: { environment: 'node' },
 });
