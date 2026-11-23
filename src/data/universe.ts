@@ -1,3 +1,4 @@
+import { US_SECTORS } from './sectors';
 /**
  * Who is on each board and which sector they belong to.
  *
@@ -5,8 +6,7 @@
  * quote volume), so the list follows the money. This map only names and groups
  * them; a perp that is not in it lands in "Other".
  *
- * US: the most-traded US names by options volume and retail flow, plus the
- * index and sector ETFs traders watch.
+ * US: the S&P 500 and its sectors live in sectors.ts and sp500.json.
  */
 
 export interface SectorDef {
@@ -129,94 +129,6 @@ export const THOUSAND_X = new Set(['PEPE', 'SHIB', 'BONK', 'FLOKI', 'SATS', 'RAT
 
 /** Perps that are not a directional asset: stablecoins and wrapped duplicates. */
 export const CRYPTO_EXCLUDE = new Set(['USDC', 'FDUSD', 'TUSD', 'USDP', 'DAI', 'BTCDOM', 'DEFI', 'USDE', 'WBTC', 'WBETH', 'BUSD']);
-
-export const US_SECTORS: SectorDef[] = [
-  { id: 'etf', label: 'Index ETFs' },
-  { id: 'semis', label: 'Semis' },
-  { id: 'tech', label: 'Big Tech' },
-  { id: 'software', label: 'Software' },
-  { id: 'crypto', label: 'Crypto Stocks' },
-  { id: 'fin', label: 'Financials' },
-  { id: 'consumer', label: 'Consumer' },
-  { id: 'health', label: 'Healthcare' },
-  { id: 'energy', label: 'Energy' },
-  { id: 'industrial', label: 'Industrials' },
-  { id: 'comm', label: 'Media & Telco' },
-];
-
-/** symbol → [name, sector]. Order is the board's default priority (most traded first). */
-export const US_ASSETS: Array<[string, string, string]> = [
-  ['SPY', 'S&P 500 ETF', 'etf'],
-  ['QQQ', 'Nasdaq 100 ETF', 'etf'],
-  ['IWM', 'Russell 2000 ETF', 'etf'],
-  ['NVDA', 'Nvidia', 'semis'],
-  ['TSLA', 'Tesla', 'consumer'],
-  ['AAPL', 'Apple', 'tech'],
-  ['MU', 'Micron', 'semis'],
-  ['AMD', 'AMD', 'semis'],
-  ['INTC', 'Intel', 'semis'],
-  ['META', 'Meta', 'tech'],
-  ['AMZN', 'Amazon', 'tech'],
-  ['MSTR', 'Strategy', 'crypto'],
-  ['GOOGL', 'Alphabet', 'tech'],
-  ['PLTR', 'Palantir', 'software'],
-  ['ORCL', 'Oracle', 'software'],
-  ['CRWV', 'CoreWeave', 'software'],
-  ['HOOD', 'Robinhood', 'fin'],
-  ['AVGO', 'Broadcom', 'semis'],
-  ['MSFT', 'Microsoft', 'tech'],
-  ['SOFI', 'SoFi', 'fin'],
-  ['IREN', 'IREN', 'crypto'],
-  ['MARA', 'MARA Holdings', 'crypto'],
-  ['WULF', 'TeraWulf', 'crypto'],
-  ['COIN', 'Coinbase', 'crypto'],
-  ['IBIT', 'iShares Bitcoin ETF', 'crypto'],
-  ['SMH', 'Semiconductor ETF', 'etf'],
-  ['TSM', 'TSMC', 'semis'],
-  ['ARM', 'Arm', 'semis'],
-  ['QCOM', 'Qualcomm', 'semis'],
-  ['SMCI', 'Super Micro', 'semis'],
-  ['ASML', 'ASML', 'semis'],
-  ['NFLX', 'Netflix', 'comm'],
-  ['UBER', 'Uber', 'industrial'],
-  ['CRM', 'Salesforce', 'software'],
-  ['ADBE', 'Adobe', 'software'],
-  ['NOW', 'ServiceNow', 'software'],
-  ['SNOW', 'Snowflake', 'software'],
-  ['SHOP', 'Shopify', 'software'],
-  ['APP', 'AppLovin', 'software'],
-  ['RDDT', 'Reddit', 'comm'],
-  ['JPM', 'JPMorgan', 'fin'],
-  ['BAC', 'Bank of America', 'fin'],
-  ['GS', 'Goldman Sachs', 'fin'],
-  ['WFC', 'Wells Fargo', 'fin'],
-  ['V', 'Visa', 'fin'],
-  ['MA', 'Mastercard', 'fin'],
-  ['PYPL', 'PayPal', 'fin'],
-  ['XOM', 'Exxon Mobil', 'energy'],
-  ['CVX', 'Chevron', 'energy'],
-  ['OXY', 'Occidental', 'energy'],
-  ['LLY', 'Eli Lilly', 'health'],
-  ['UNH', 'UnitedHealth', 'health'],
-  ['JNJ', 'Johnson & Johnson', 'health'],
-  ['PFE', 'Pfizer', 'health'],
-  ['HIMS', 'Hims & Hers', 'health'],
-  ['COST', 'Costco', 'consumer'],
-  ['WMT', 'Walmart', 'consumer'],
-  ['HD', 'Home Depot', 'consumer'],
-  ['NKE', 'Nike', 'consumer'],
-  ['MCD', 'McDonald’s', 'consumer'],
-  ['RIVN', 'Rivian', 'consumer'],
-  ['F', 'Ford', 'consumer'],
-  ['BA', 'Boeing', 'industrial'],
-  ['CAT', 'Caterpillar', 'industrial'],
-  ['GE', 'GE Aerospace', 'industrial'],
-  ['LMT', 'Lockheed Martin', 'industrial'],
-  ['DIS', 'Disney', 'comm'],
-  ['T', 'AT&T', 'comm'],
-  ['TLT', '20Y Treasury ETF', 'etf'],
-  ['GLD', 'Gold ETF', 'etf'],
-];
 
 export const sectorLabel = (market: 'crypto' | 'us', id: string): string =>
   (market === 'crypto' ? CRYPTO_SECTORS : US_SECTORS).find(s => s.id === id)?.label ?? 'Other';

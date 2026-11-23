@@ -1,9 +1,9 @@
 import type React from 'react';
-import { memo, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { Flow, FlowAsset } from '../model/flow';
 import { G, H, MID, NAMED_PER_SIDE, W, chartScale, layoutSide, thin, timeX, type Placed, type SideLayout } from './geometry';
 import { Candles } from './Candles';
-import { clock, price, shortPrice, SHORT_BUILDUP, signedPct, signedPrice } from './format';
+import { clock, price, shortPrice, SHORT_BUILDUP, signedPct, signedPrice, tilePct } from './format';
 import { FONT, MONO, sideColor, sideInk } from './palette';
 import { usePalette } from './usePalette';
 
@@ -16,6 +16,9 @@ interface Props {
   onPick: (symbol: string) => void;
   timeZone?: string;
 }
+
+/** Rangebound names shown on the middle bar (the rest are counted). */
+const BAR_CHIPS = 11;
 
 const sideClass = (a: FlowAsset) => (a.side === 'bullish' ? 'bull' : a.side === 'bearish' ? 'bear' : 'flat');
 
@@ -73,31 +76,43 @@ function Spread({ flow, max, focus, onHover, onPick }: { flow: Flow; max: number
   const cy = 58;
   const tick = { fill: pal.muted, fontSize: 10.5, fontFamily: MONO };
   const x = (pct: number) => x0 + ((Math.max(-max, Math.min(max, pct)) + max) / (2 * max)) * (x1 - x0);
-  // a simple beeswarm: stack dots that would overlap
-  const sorted = [...flow.assets].sort((a, b) => a.changePct - b.changePct);
-  const rows: number[] = [];
-  const placed = sorted.map(a => {
-    const px = x(a.changePct);
-    let row = 0;
-    while (rows[row] != null && px - rows[row] < 6.5) row++;
-    rows[row] = px;
-    const offset = row === 0 ? 0 : (row % 2 ? -1 : 1) * Math.ceil(row / 2) * 6;
-    return { a, px, py: cy + Math.max(-14, Math.min(14, offset)) };
-  });
+  const big = flow.assets.length > 150;
+  const r = big ? 2.3 : 3.3;
+  const placed = useMemo(() => {
+    // a simple beeswarm: stack dots that would overlap
+    const sorted = [...flow.assets].sort((a, b) => a.changePct - b.changePct);
+    const rows: number[] = [];
+    const gap = r * 2;
+    return sorted.map(a => {
+      const px = x(a.changePct);
+      let row = 0;
+      while (rows[row] != null && px - rows[row] < gap) row++;
+      rows[row] = px;
+      const offset = row === 0 ? 0 : (row % 2 ? -1 : 1) * Math.ceil(row / 2) * (r * 1.8);
+      return { a, px, py: cy + Math.max(-16, Math.min(16, offset)) };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow, max, r]);
+  const handlers = (sym: string) => ({ onMouseEnter: () => onHover(sym), onMouseLeave: () => onHover(null), onClick: () => onPick(sym) });
+  const dots = useMemo(() => placed.map(({ a, px, py }) => a.isBenchmark ? (
+    <rect key={a.symbol} className="dot bench" x={px - 4.2} y={py - 4.2} width={8.4} height={8.4} transform={`rotate(45 ${px} ${py})`} fill={pal.bench} {...handlers(a.symbol)}><title>{a.symbol} {signedPct(a.changePct)}</title></rect>
+  ) : (
+    <circle key={a.symbol} className="dot" cx={px} cy={py} r={r} fill={sideColor(pal, a.side)} {...handlers(a.symbol)}><title>{a.symbol} {signedPct(a.changePct)}</title></circle>
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  )), [placed, pal, r]);
   return (
     <svg className="spread" width={W} height={90} style={{ left: 0, top: 0 }} viewBox={`0 0 ${W} 90`}>
       <text className="cap" x={G.sectorsX} y={cy + 4} fill={pal.muted} fontSize={11} fontWeight={600} fontFamily={FONT} letterSpacing="0.06em">{`SPREAD OF THE ${flow.window.label.toUpperCase()}`}</text>
       <line className="axis" x1={x0} x2={x1} y1={cy} y2={cy} stroke={pal.line} />
-      <line className="zero" x1={x(0)} x2={x(0)} y1={cy - 16} y2={cy + 16} stroke={pal.ink} strokeOpacity={0.35} />
-      <text className="tick" x={x0} y={cy + 28} {...tick}>{signedPct(-max, 1)}</text>
-      <text className="tick" x={x(0)} y={cy + 28} textAnchor="middle" {...tick}>0%</text>
-      <text className="tick" x={x1} y={cy + 28} textAnchor="end" {...tick}>{signedPct(max, 1)}</text>
-      {placed.map(({ a, px, py }) => a.isBenchmark ? (
-        <rect key={a.symbol} className={`dot bench${focus && !focus.has(a.symbol) ? ' dim' : ''}`} x={px - 4.2} y={py - 4.2} width={8.4} height={8.4} transform={`rotate(45 ${px} ${py})`} fill={pal.bench}
-          onMouseEnter={() => onHover(a.symbol)} onMouseLeave={() => onHover(null)} onClick={() => onPick(a.symbol)}><title>{a.symbol} {signedPct(a.changePct)}</title></rect>
-      ) : (
-        <circle key={a.symbol} className={`dot ${sideClass(a)}${focus && !focus.has(a.symbol) ? ' dim' : ''}${focus?.has(a.symbol) ? ' hot' : ''}`} cx={px} cy={py} r={3.3} fill={sideColor(pal, a.side)}
-          onMouseEnter={() => onHover(a.symbol)} onMouseLeave={() => onHover(null)} onClick={() => onPick(a.symbol)}><title>{a.symbol} {signedPct(a.changePct)}</title></circle>
+      <line className="zero" x1={x(0)} x2={x(0)} y1={cy - 18} y2={cy + 18} stroke={pal.ink} strokeOpacity={0.35} />
+      <text className="tick" x={x0} y={cy + 30} {...tick}>{signedPct(-max, 1)}</text>
+      <text className="tick" x={x(0)} y={cy + 30} textAnchor="middle" {...tick}>0%</text>
+      <text className="tick" x={x1} y={cy + 30} textAnchor="end" {...tick}>{signedPct(max, 1)}</text>
+      <g opacity={focus ? 0.2 : 1}>{dots}</g>
+      {placed.some(p => p.a.changePct > max) && <text x={x1 + 8} y={cy + 4} {...tick} fill={pal.bullInk}>▸ {flow.assets.filter(a => a.changePct > max).length} beyond</text>}
+      {placed.some(p => p.a.changePct < -max) && <text x={x0 - 8} y={cy + 4} textAnchor="end" {...tick} fill={pal.bearInk}>{flow.assets.filter(a => a.changePct < -max).length} beyond ◂</text>}
+      {focus && placed.filter(p => focus.has(p.a.symbol)).map(({ a, px, py }) => (
+        <circle key={`h${a.symbol}`} cx={px} cy={py} r={r + 1.2} fill={a.isBenchmark ? pal.bench : sideColor(pal, a.side)} stroke={pal.ink} strokeWidth={1.2} pointerEvents="none" />
       ))}
     </svg>
   );
@@ -134,59 +149,79 @@ function Sectors({ flow, hotSector, onHoverSector }: { flow: Flow; hotSector: st
 
 /* ---------------------------------------------------------------- the lines, tunnels and fan */
 
-interface Scale { max: number; y: (pct: number) => number; ticks: number[] }
+interface Scale { max: number; y: (pct: number) => number; ticks: number[]; clipped: boolean }
 
-const Lines = memo(function Lines({ flow, scale, bull, bear, focus, timeZone }: { flow: Flow; scale: Scale; bull: SideLayout; bear: SideLayout; focus: Set<string> | null; timeZone?: string }) {
-  const pal = usePalette();
-  const named = new Set([...flow.bullish.slice(0, NAMED_PER_SIDE), ...flow.bearish.slice(0, NAMED_PER_SIDE)].map(a => a.symbol));
-  const lineAttrs = (a: FlowAsset) => a.isBenchmark
-    ? { fill: 'none', stroke: pal.bench, strokeWidth: 1.7, strokeDasharray: '1.5 3.5', opacity: 0.85 }
-    : { fill: 'none', stroke: sideColor(pal, a.side), strokeWidth: named.has(a.symbol) ? 2 : 1, opacity: named.has(a.symbol) ? 0.95 : a.side === 'rangebound' ? 0.32 : 0.28 };
-  const gtext = { fill: pal.muted, fontSize: 10.5, fontFamily: MONO };
+interface LinePath { a: FlowAsset; d: string; ex: number; ey: number }
 
-  // Tunnel slots: each side's lines pass through in the order of their ports.
-  const slots = new Map<string, number>();
-  for (const [layout, list] of [[bull, flow.bullish], [bear, flow.bearish]] as const) {
-    const ordered = [...list].sort((a, b) => layout.bySymbol.get(a.symbol)!.portY - layout.bySymbol.get(b.symbol)!.portY);
-    const { y0, y1 } = layout.tunnel;
-    ordered.forEach((a, i) => slots.set(a.symbol, ordered.length === 1 ? (y0 + y1) / 2 : y0 + 3 + ((y1 - y0 - 6) * i) / (ordered.length - 1)));
-  }
-  const flatOrder = [...flow.rangebound].sort((a, b) => b.changePct - a.changePct);
-  flatOrder.forEach((a, i) => slots.set(a.symbol, MID - 5 + (10 * (i + 0.5)) / Math.max(1, flatOrder.length)));
-
-  const paths = flow.assets.map(a => {
-    const pts = thin(a.points);
-    let d = '';
-    pts.forEach((p, i) => { d += `${i ? 'L' : 'M'}${Math.min(G.chartX1, timeX(flow, p.t)).toFixed(1)},${scale.y(p.pct).toFixed(1)}`; });
-    const last = pts[pts.length - 1];
-    const ex = Math.min(G.chartX1, timeX(flow, last.t));
-    const ey = scale.y(last.pct);
-    const sy = slots.get(a.symbol) ?? MID;
-    const bend = G.tunnelX0 - ex;
-    d += `C${(ex + bend * 0.55).toFixed(1)},${ey.toFixed(1)} ${(G.tunnelX0 - bend * 0.25).toFixed(1)},${sy.toFixed(1)} ${G.tunnelX0},${sy.toFixed(1)}`;
-    if (a.side === 'rangebound') {
-      d += `L${G.tunnelX1 + 30},${sy.toFixed(1)}`;
-    } else {
-      const port = (a.side === 'bullish' ? bull : bear).bySymbol.get(a.symbol)?.portY ?? sy;
-      d += `L${G.tunnelX1},${sy.toFixed(1)}C${G.tunnelX1 + 38},${sy.toFixed(1)} ${G.portX - 38},${port.toFixed(1)} ${G.portX},${port.toFixed(1)}`;
+/** Every line's path, computed once per board (not on hover). */
+function useLinePaths(flow: Flow, scale: Scale, bull: SideLayout, bear: SideLayout) {
+  return useMemo(() => {
+    const named = new Set([...flow.bullish.slice(0, NAMED_PER_SIDE), ...flow.bearish.slice(0, NAMED_PER_SIDE)].map(a => a.symbol));
+    // Tunnel slots: each side's lines pass through in the order of their ports.
+    const slots = new Map<string, number>();
+    for (const [layout, list] of [[bull, flow.bullish], [bear, flow.bearish]] as const) {
+      const ordered = [...list].sort((a, b) => layout.bySymbol.get(a.symbol)!.portY - layout.bySymbol.get(b.symbol)!.portY);
+      const { y0, y1 } = layout.tunnel;
+      ordered.forEach((a, i) => slots.set(a.symbol, ordered.length === 1 ? (y0 + y1) / 2 : y0 + 3 + ((y1 - y0 - 6) * i) / (ordered.length - 1)));
     }
-    return { a, d, ex, ey };
-  });
+    const flatOrder = [...flow.rangebound].sort((a, b) => b.changePct - a.changePct);
+    flatOrder.forEach((a, i) => slots.set(a.symbol, MID - 5 + (10 * (i + 0.5)) / Math.max(1, flatOrder.length)));
 
-  // Labels for the biggest movers, pushed apart so they never collide.
-  const labels = paths.filter(p => named.has(p.a.symbol) || p.a.isBenchmark).map(p => ({ ...p, ly: p.ey })).sort((u, v) => u.ly - v.ly);
-  for (let i = 1; i < labels.length; i++) if (labels[i].ly - labels[i - 1].ly < 13) labels[i].ly = labels[i - 1].ly + 13;
-  for (let i = labels.length - 2; i >= 0; i--) if (labels[i + 1].ly > G.bottom && labels[i + 1].ly - labels[i].ly < 13) labels[i].ly = labels[i + 1].ly - 13;
+    const detail = flow.assets.length > 200 ? 90 : 160;
+    const paths: LinePath[] = flow.assets.map(a => {
+      const pts = thin(a.points, detail);
+      let d = '';
+      pts.forEach((p, i) => { d += `${i ? 'L' : 'M'}${Math.min(G.chartX1, timeX(flow, p.t)).toFixed(1)},${scale.y(p.pct).toFixed(1)}`; });
+      const last = pts[pts.length - 1];
+      const ex = Math.min(G.chartX1, timeX(flow, last.t));
+      const ey = scale.y(last.pct);
+      const sy = slots.get(a.symbol) ?? MID;
+      const bend = G.tunnelX0 - ex;
+      d += `C${(ex + bend * 0.55).toFixed(1)},${ey.toFixed(1)} ${(G.tunnelX0 - bend * 0.25).toFixed(1)},${sy.toFixed(1)} ${G.tunnelX0},${sy.toFixed(1)}`;
+      if (a.side === 'rangebound') {
+        d += `L${G.tunnelX1 + 30},${sy.toFixed(1)}`;
+      } else {
+        const port = (a.side === 'bullish' ? bull : bear).bySymbol.get(a.symbol)?.portY ?? sy;
+        d += `L${G.tunnelX1},${sy.toFixed(1)}C${G.tunnelX1 + 38},${sy.toFixed(1)} ${G.portX - 38},${port.toFixed(1)} ${G.portX},${port.toFixed(1)}`;
+      }
+      return { a, d, ex, ey };
+    });
 
+    // Labels for the biggest movers, pushed apart so they never collide.
+    const labels = paths.filter(p => named.has(p.a.symbol) || p.a.isBenchmark).map(p => ({ ...p, ly: p.ey })).sort((u, v) => u.ly - v.ly);
+    for (let i = 1; i < labels.length; i++) if (labels[i].ly - labels[i - 1].ly < 13) labels[i].ly = labels[i - 1].ly + 13;
+    for (let i = labels.length - 2; i >= 0; i--) if (labels[i + 1].ly > G.bottom && labels[i + 1].ly - labels[i].ly < 13) labels[i].ly = labels[i + 1].ly - 13;
+    // Quiet lines first, then the named ones, then the benchmark on top.
+    const weight = (a: FlowAsset) => (a.isBenchmark ? 3 : named.has(a.symbol) ? 2 : 0);
+    paths.sort((u, v) => weight(u.a) - weight(v.a));
+    return { paths, labels, named };
+  }, [flow, scale, bull, bear]);
+}
+
+/** Thinner, fainter lines when the board holds hundreds of names, so the shape still reads. */
+const quietOpacity = (n: number) => Math.max(0.07, Math.min(0.28, 0.28 * Math.sqrt(60 / Math.max(60, n))));
+
+function Lines({ flow, scale, bull, bear, focus, timeZone }: { flow: Flow; scale: Scale; bull: SideLayout; bear: SideLayout; focus: Set<string> | null; timeZone?: string }) {
+  const pal = usePalette();
+  const { paths, labels, named } = useLinePaths(flow, scale, bull, bear);
+  const quiet = quietOpacity(flow.assets.length);
+  const lineAttrs = (a: FlowAsset, hot = false) => a.isBenchmark
+    ? { fill: 'none', stroke: pal.bench, strokeWidth: hot ? 2.4 : 1.7, strokeDasharray: '1.5 3.5', opacity: hot ? 1 : 0.85 }
+    : { fill: 'none', stroke: sideColor(pal, a.side), strokeWidth: hot ? 2.6 : named.has(a.symbol) ? 2 : 1, opacity: hot ? 1 : named.has(a.symbol) ? 0.95 : a.side === 'rangebound' ? quiet * 1.15 : quiet };
+  const gtext = { fill: pal.muted, fontSize: 10.5, fontFamily: MONO };
   const xTicks = timeTicks(flow);
-  const cls = (a: FlowAsset) => {
-    const base = a.isBenchmark ? 'ln bench' : `ln ${sideClass(a)}${named.has(a.symbol) ? ' named' : ''}`;
-    if (!focus) return base;
-    return `${base}${focus.has(a.symbol) ? ' hot' : ' dim'}`;
-  };
-  // Draw quiet lines first, named lines and the benchmark on top, the focused line last.
-  const order = [...paths].sort((u, v) => weight(u.a) - weight(v.a) || (focus?.has(u.a.symbol) ? 1 : 0) - (focus?.has(v.a.symbol) ? 1 : 0));
-  function weight(a: FlowAsset) { return (focus?.has(a.symbol) ? 10 : 0) + (a.isBenchmark ? 3 : named.has(a.symbol) ? 2 : 0); }
+  const hot = focus ? paths.filter(p => focus.has(p.a.symbol)) : [];
+
+  // The base layer is the same element tree on every hover, so React leaves it alone.
+  const base = useMemo(() => paths.map(({ a, d }) => <path key={a.symbol} d={d} {...lineAttrs(a)} />),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paths, pal, quiet]);
+
+  const ext = useMemo(() => [...flow.bullish, ...flow.bearish].map(a => {
+    const p = (a.side === 'bullish' ? bull : bear).bySymbol.get(a.symbol);
+    if (!p || (p.slot !== 'tall' && p.slot !== 'card')) return null;
+    return { a, d: `M${G.portX},${p.portY.toFixed(1)}L${p.x},${p.portY.toFixed(1)}`, portY: p.portY };
+  }).filter((x): x is { a: FlowAsset; d: string; portY: number } => x != null), [flow, bull, bear]);
 
   return (
     <svg className="lines" width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ left: 0, top: 0 }}>
@@ -215,7 +250,7 @@ const Lines = memo(function Lines({ flow, scale, bull, bear, focus, timeZone }: 
       {flow.end > flow.asOf + 60_000 && (
         <g className="now">
           <line x1={timeX(flow, flow.asOf)} x2={timeX(flow, flow.asOf)} y1={G.top} y2={G.bottom} stroke={pal.ink} strokeOpacity={0.35} strokeDasharray="3 3" />
-          <text x={timeX(flow, flow.asOf)} y={G.top - 6} textAnchor="middle" {...gtext} fontSize={10}>now</text>
+          <text x={timeX(flow, flow.asOf) + 4} y={G.bottom - 6} {...gtext} fontSize={10}>now</text>
         </g>
       )}
       {/* the zero line carried through to the bar */}
@@ -227,31 +262,36 @@ const Lines = memo(function Lines({ flow, scale, bull, bear, focus, timeZone }: 
           <rect className="rim" x={G.tunnelX0 - 4} y={l.tunnel.y0 - 7} width={G.tunnelX1 - G.tunnelX0 + 8} height={l.tunnel.y1 - l.tunnel.y0 + 14} rx={10} fill="none" stroke={id === 'bull' ? pal.bull : pal.bear} strokeOpacity={0.4} />
         </g>
       ))}
-      {order.map(({ a, d }) => <path key={a.symbol} className={cls(a)} d={d} {...lineAttrs(a)} />)}
-      {/* lines carried on to the tall tiles and cards, under the tiles */}
-      {[...flow.bullish, ...flow.bearish].map(a => {
-        const p = (a.side === 'bullish' ? bull : bear).bySymbol.get(a.symbol);
-        if (!p || (p.slot !== 'tall' && p.slot !== 'card')) return null;
-        return <path key={a.symbol} className={`ext ${sideClass(a)}${focus ? (focus.has(a.symbol) ? ' hot' : ' dim') : ''}`} d={`M${G.portX},${p.portY.toFixed(1)}L${p.x},${p.portY.toFixed(1)}`} fill="none" stroke={sideColor(pal, a.side)} strokeDasharray="2 3" opacity={0.35} />;
-      })}
-      {/* ports */}
-      {[...flow.bullish, ...flow.bearish].map(a => {
-        const p = (a.side === 'bullish' ? bull : bear).bySymbol.get(a.symbol);
-        return p ? <circle key={a.symbol} className={`port ${sideClass(a)}${focus?.has(a.symbol) ? ' hot' : ''}`} cx={G.portX} cy={p.portY} r={1.8} fill={sideColor(pal, a.side)} /> : null;
-      })}
+      <g className="base" opacity={focus ? 0.22 : 1}>
+        {base}
+        {/* lines carried on to the tall tiles and cards, under the tiles */}
+        {ext.map(e => <path key={e.a.symbol} d={e.d} fill="none" stroke={sideColor(pal, e.a.side)} strokeDasharray="2 3" opacity={0.35} />)}
+        {[...flow.bullish, ...flow.bearish].map(a => {
+          const p = (a.side === 'bullish' ? bull : bear).bySymbol.get(a.symbol);
+          return p ? <circle key={a.symbol} cx={G.portX} cy={p.portY} r={1.8} fill={sideColor(pal, a.side)} /> : null;
+        })}
+      </g>
+      {/* the hovered line (or sector) drawn again, on top and at full strength */}
+      {hot.map(({ a, d }) => <path key={a.symbol} className="hot" d={d} {...lineAttrs(a, true)} />)}
+      {ext.filter(e => focus?.has(e.a.symbol)).map(e => <path key={`x${e.a.symbol}`} d={e.d} fill="none" stroke={sideColor(pal, e.a.side)} strokeWidth={2} />)}
       {/* end labels */}
-      {labels.map(({ a, ex, ey, ly }) => (
-        <g key={a.symbol} className={`lbl ${a.isBenchmark ? 'bench' : sideClass(a)}${focus && !focus.has(a.symbol) ? ' dim' : ''}`}>
-          {Math.abs(ly - ey) > 3 && <line x1={ex - 4} y1={ey} x2={ex - 10} y2={ly + 0.5} stroke={a.isBenchmark ? pal.ink : sideColor(pal, a.side)} />}
-          <text x={ex - 12} y={ly + 4} textAnchor="end" fill={a.isBenchmark ? pal.ink : sideInk(pal, a.side)} fontSize={11} fontWeight={700} fontFamily={FONT} stroke={pal.bg} strokeWidth={3.5} strokeLinejoin="round" paintOrder="stroke">{a.isBenchmark ? '◆ ' : ''}{a.symbol} <tspan fontFamily={MONO} fontWeight={500}>{signedPct(a.changePct)}</tspan></text>
-        </g>
-      ))}
+      <g opacity={focus ? 0.25 : 1}>
+        {labels.map(({ a, ex, ey, ly }) => (
+          <g key={a.symbol} className="lbl">
+            {Math.abs(ly - ey) > 3 && <line x1={ex - 4} y1={ey} x2={ex - 10} y2={ly + 0.5} stroke={a.isBenchmark ? pal.ink : sideColor(pal, a.side)} />}
+            <text x={ex - 12} y={ly + 4} textAnchor="end" fill={a.isBenchmark ? pal.ink : sideInk(pal, a.side)} fontSize={11} fontWeight={700} fontFamily={FONT} stroke={pal.bg} strokeWidth={3.5} strokeLinejoin="round" paintOrder="stroke">{a.isBenchmark ? '◆ ' : ''}{a.symbol} <tspan fontFamily={MONO} fontWeight={500}>{signedPct(a.changePct)}</tspan></text>
+          </g>
+        ))}
+      </g>
+      {hot.length === 1 && !labels.some(l => l.a.symbol === hot[0].a.symbol) && (
+        <text x={hot[0].ex - 12} y={hot[0].ey + 4} textAnchor="end" fill={hot[0].a.isBenchmark ? pal.ink : sideInk(pal, hot[0].a.side)} fontSize={11.5} fontWeight={700} fontFamily={FONT} stroke={pal.bg} strokeWidth={3.5} strokeLinejoin="round" paintOrder="stroke">{hot[0].a.symbol} <tspan fontFamily={MONO} fontWeight={500}>{signedPct(hot[0].a.changePct)}</tspan></text>
+      )}
       {/* tunnel captions */}
       <text className="tcap bull" x={(G.tunnelX0 + G.tunnelX1) / 2} y={bull.tunnel.y0 - 14} textAnchor="middle" fill={pal.bullInk} fontSize={10.5} fontWeight={700} fontFamily={FONT} letterSpacing="0.08em">▲ BULLISH {flow.bullish.length}</text>
       <text className="tcap bear" x={(G.tunnelX0 + G.tunnelX1) / 2} y={bear.tunnel.y1 + 24} textAnchor="middle" fill={pal.bearInk} fontSize={10.5} fontWeight={700} fontFamily={FONT} letterSpacing="0.08em">▼ BEARISH {flow.bearish.length}</text>
     </svg>
   );
-});
+}
 
 function timeTicks(flow: Flow): number[] {
   const span = flow.end - flow.start;
@@ -269,12 +309,12 @@ function Bar({ flow, focus, onHover, onPick }: { flow: Flow; focus: Set<string> 
   return (
     <div className="bar" style={{ left: G.tunnelX1 + 30, top: MID - G.barH / 2, width: W - G.tunnelX1 - 30, height: G.barH }}>
       <span className="cap">Rangebound {names.length}</span>
-      {names.slice(0, 26).map(a => (
+      {names.slice(0, BAR_CHIPS).map(a => (
         <button key={a.symbol} className={`chip${focus?.has(a.symbol) ? ' hot' : ''}`} onMouseEnter={() => onHover(a.symbol)} onMouseLeave={() => onHover(null)} onClick={() => onPick(a.symbol)}>
           {a.symbol} <span>{signedPct(a.changePct, 1)}</span>
         </button>
       ))}
-      {names.length > 26 && <span className="cap">+{names.length - 26}</span>}
+      {names.length > BAR_CHIPS && <span className="cap">+{names.length - BAR_CHIPS} more</span>}
       {!names.length && <span className="cap muted">every name moved past ±{flow.window.floor}%</span>}
     </div>
   );
@@ -303,7 +343,7 @@ function Element({ p, maxMove, focus, onHover, onPick, side }: { p: Placed; maxM
   if (p.slot === 'tile') {
     return (
       <div className={`tile ${cls}${a.isBenchmark ? ' benchmark' : ''}`} title={a.isBenchmark ? `${a.symbol}, the benchmark` : undefined} style={{ ...style, ['--k' as string]: (0.1 + intensity * 0.9).toFixed(3) }} {...handlers}>
-        <span className="top"><b>{a.symbol}</b><span className="pct">{signedPct(a.changePct)}</span></span>
+        <span className="top"><b>{a.symbol}</b><span className="pct">{tilePct(a.changePct)}</span></span>
         <span className="bu"><i className={a.buildUp.fresh ? 'fill' : 'ring'} />{SHORT_BUILDUP[a.buildUp.code]}</span>
       </div>
     );

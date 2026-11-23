@@ -1,5 +1,7 @@
 import type { AssetSeries, Candle, MarketData, OIPoint, StrikeRow } from './types';
-import { CRYPTO_ASSETS, US_ASSETS } from './universe';
+import { CRYPTO_ASSETS } from './universe';
+import { US_ETFS, US_POPULAR } from './sectors';
+import sp500 from './sp500.json';
 import { BAR, floorTo, lastUsSession, MIN, nyTime, nyDate } from './time';
 
 /**
@@ -148,7 +150,21 @@ const US_PRICES: Record<string, number> = {
   HD: 380, NKE: 64, MCD: 300, RIVN: 13, F: 13, BA: 205, CAT: 560, GE: 300, LMT: 470, DIS: 112, T: 26, TLT: 90, GLD: 365,
 };
 
-const US_BETA: Record<string, number> = { etf: 0.7, semis: 1.6, tech: 1.1, software: 1.4, crypto: 2.4, fin: 1.0, consumer: 1.0, health: 0.7, energy: 0.9, industrial: 0.9, comm: 1.0 };
+const US_BETA: Record<string, number> = {
+  tech: 1.35, comm: 1.15, discretionary: 1.2, staples: 0.6, financials: 1.0, health: 0.75, industrials: 0.95,
+  energy: 1.05, materials: 0.95, utilities: 0.55, realestate: 0.85, etf: 1, popular: 2.1,
+};
+
+/** Every name on the demo US board: the index ETFs, the S&P 500 and the popular extras. */
+export function demoUsNames(): Array<{ symbol: string; name: string; sector: string; group: 'sp500' | 'etf' | 'popular' }> {
+  const all = [
+    ...US_ETFS.map(([symbol, name]) => ({ symbol, name, sector: 'etf', group: 'etf' as const })),
+    ...(sp500.members as Array<[string, string, string]>).map(([symbol, name, sector]) => ({ symbol, name, sector, group: 'sp500' as const })),
+    ...US_POPULAR.map(([symbol, name]) => ({ symbol, name, sector: 'popular', group: 'popular' as const })),
+  ];
+  const seen = new Set<string>();
+  return all.filter(n => !seen.has(n.symbol) && !!seen.add(n.symbol)); // a popular name may since have joined the index
+}
 
 /** U-shaped intraday volume: heavy at the open and the close. */
 const uShape = (slot: number, slots = 78) => {
@@ -175,12 +191,13 @@ export function demoUs(now = Date.now()): MarketData {
     prevDates.push(nyTime(date, 9, 30));
   }
 
-  const assets: AssetSeries[] = US_ASSETS.map(([symbol, name, sector]) => {
+  const assets: AssetSeries[] = demoUsNames().map(({ symbol, name, sector, group }) => {
     const r = rng(hash(`${symbol}:${session.date}`));
-    const ref = US_PRICES[symbol] ?? 100;
-    const beta = symbol === 'SPY' || symbol === 'QQQ' ? 1 : symbol === 'IWM' ? 1.2 : (US_BETA[sector] ?? 1);
+    const ref = US_PRICES[symbol] ?? Math.round(15 + rng(hash(symbol))() ** 2 * 600);
+    const beta = symbol === 'SPY' || symbol === 'QQQ' || symbol === 'DIA' ? 1 : symbol === 'IWM' ? 1.2 : (US_BETA[sector] ?? 1);
     const vol = sector === 'etf' ? 0.0006 : 0.0011 * beta * (0.8 + r() * 0.5);
-    const baseVolume = (symbol === 'SPY' ? 8e5 : symbol === 'QQQ' ? 5e5 : 4e7 / ref) * (0.5 + r());
+    const big = US_PRICES[symbol] ? 4 : 1;
+    const baseVolume = (symbol === 'SPY' ? 8e5 : symbol === 'QQQ' ? 5e5 : (big * 6e6) / ref) * (0.5 + r());
     const own = sector === 'etf' ? 0 : gauss(r) * 1.1 + sectorMood(sector) * 0.9;
     const gap = (mood.market * 0.4 + own * 0.5) * vol * 3;
     // Prior sessions, for relative volume.
@@ -210,10 +227,12 @@ export function demoUs(now = Date.now()): MarketData {
     const lean = own * 0.25;
     opts.callVol = Math.round(opts.callVol * Math.exp(lean));
     opts.putVol = Math.round(opts.putVol * Math.exp(-lean));
-    return { symbol, name, sector, candles: [...prior, ...today].map(({ tb: _tb, ...c }) => c), prevClose, avgSlotVol, options: opts };
+    const prevSession = prior.slice(-slots);
+    return { symbol, name, sector, group, candles: [...prevSession, ...today].map(({ tb: _tb, ...c }) => c), prevClose, avgSlotVol, options: opts };
   });
+  const marketOpen = now >= session.open && now < session.close;
   return {
-    market: 'us', source: 'Demo session', live: false, note: 'simulated prices', asOf,
-    session: { open: session.open, close: session.close }, benchmark: 'SPY', assets,
+    market: 'us', source: 'Demo session', live: marketOpen, marketOpen, note: 'simulated prices', asOf,
+    session: { open: session.open, close: session.close }, sessionDate: session.date, benchmark: 'SPY', assets,
   };
 }

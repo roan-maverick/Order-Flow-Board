@@ -43,6 +43,8 @@ export interface AssetSeries {
   /** US: the average volume of each 5-minute slot of the session over prior days, slot 0 = the open. */
   avgSlotVol?: number[];
   options?: OptionsBook | null;
+  /** US: which list the name belongs to (the S&P 500, an index ETF, or a popular name outside the index). */
+  group?: 'sp500' | 'etf' | 'popular';
 }
 
 export type MarketId = 'crypto' | 'us';
@@ -58,6 +60,10 @@ export interface MarketData {
   asOf: number;
   /** US: the session open and close, epoch ms. */
   session?: { open: number; close: number };
+  /** US: the New York date of the session shown (YYYY-MM-DD). */
+  sessionDate?: string;
+  /** US: true while the regular session is open. */
+  marketOpen?: boolean;
   benchmark: string;
   assets: AssetSeries[];
 }

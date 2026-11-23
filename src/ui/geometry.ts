@@ -16,17 +16,17 @@ export const G = {
   sectorsX: 0,
   sectorsW: 158,
   chartX0: 196,
-  chartX1: 700,
-  tunnelX0: 770,
-  tunnelX1: 856,
-  portX: 924,
-  tilesX: 932,
-  tileW: 104,
+  chartX1: 690,
+  tunnelX0: 758,
+  tunnelX1: 844,
+  portX: 912,
+  tilesX: 920,
+  tileW: 109,
   tileH: 54,
   tileGapX: 9,
   tileGapY: 9,
-  tallX: 1271,
-  tallW: 124,
+  tallX: 1274,
+  tallW: 122,
   cardX: 1405,
   cardW: 275,
   barH: 18,
@@ -139,16 +139,27 @@ export function layoutSide(flow: Flow, side: 'bullish' | 'bearish'): SideLayout 
 
 
 /** The y-scale of the chart: ±max move, with a little headroom, at least ±3× the window floor. */
+/**
+ * The chart's y-scale. With hundreds of names one +30% outlier would squash
+ * everyone else into a thin band, so the scale follows the bulk of the board
+ * (its largest moves after the top few) and lines beyond it ride the edge,
+ * still labelled with their true move.
+ */
 export function chartScale(flow: Flow) {
-  let max = flow.window.floor * 3;
-  for (const a of flow.assets) for (const p of a.points) max = Math.max(max, Math.abs(p.pct));
-  max *= 1.06;
+  const peaks = flow.assets.map(a => a.points.reduce((m, p) => Math.max(m, Math.abs(p.pct)), 0)).sort((a, b) => b - a);
+  const all = peaks[0] ?? 0;
+  // Ignore the top 1.5% of names (at least the top one on a big board) when sizing the scale.
+  const skip = flow.assets.length >= 60 ? Math.max(1, Math.floor(flow.assets.length * 0.015)) : 0;
+  const bulk = peaks[skip] ?? all;
+  let max = Math.max(flow.window.floor * 3, Math.min(all, bulk * 1.25)) * 1.06;
+  if (!Number.isFinite(max) || max <= 0) max = 1;
   const half = MID - G.top - 6;
-  const y = (pct: number) => MID - (pct / max) * half;
+  const clamped = (pct: number) => Math.max(-max, Math.min(max, pct));
+  const y = (pct: number) => MID - (clamped(pct) / max) * half;
   const step = niceStep(max / 3);
   const ticks: number[] = [];
   for (let v = -Math.floor(max / step) * step; v <= max + 1e-9; v += step) ticks.push(+v.toFixed(6));
-  return { max, y, ticks };
+  return { max, y, ticks, clipped: all > max };
 }
 
 export function niceStep(raw: number): number {

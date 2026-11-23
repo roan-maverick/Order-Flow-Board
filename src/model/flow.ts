@@ -41,8 +41,14 @@ export const WINDOWS: Record<MarketId, WindowDef[]> = {
   ],
 };
 
+/** Windows used only as the "shorter window agrees" check, not offered on the board. */
+const CHECK_ONLY: Record<MarketId, WindowDef[]> = {
+  crypto: [{ id: '15m', label: '15m', minutes: 15, floor: 0.12, confirm: '1h', scope: 'over the last 15 minutes' }],
+  us: [],
+};
+
 export const windowDef = (market: MarketId, id: WindowId): WindowDef =>
-  WINDOWS[market].find(w => w.id === id) ?? WINDOWS[market][0];
+  WINDOWS[market].find(w => w.id === id) ?? CHECK_ONLY[market].find(w => w.id === id) ?? WINDOWS[market][0];
 
 export type BuildUpCode =
   | 'LONG_BUILD' | 'SHORT_COVER' | 'SHORT_BUILD' | 'LONG_UNWIND' // crypto, from OI
@@ -290,16 +296,27 @@ export function volumeProfile(candles: Candle[], bins = PROFILE_BINS): { lo: num
   return { lo, step, vol };
 }
 
-/** The heaviest traded price below and above spot, as levels ("volume shelves"). */
+/**
+ * Volume shelves: the price bands where the most trading happened over the
+ * last two sessions, below and above the price. Bands right next to the price
+ * are skipped (they are "here", not a level): a shelf must be at least about
+ * three typical 5-minute ranges away.
+ */
 export function volumeLevels(candles: Candle[], spot: number): { support: Level | null; resistance: Level | null } {
   const vp = volumeProfile(candles);
   if (!vp) return { support: null, resistance: null };
+  const ranges = candles.map(c => (c.h - c.l) / (c.c || 1)).filter(r => r > 0).sort((a, b) => a - b);
+  const typicalRange = ranges.length ? ranges[Math.floor(ranges.length / 2)] : 0.002;
+  const minGap = Math.max(spot * 0.003, spot * typicalRange * 3, vp.step);
   let support: Level | null = null;
   let resistance: Level | null = null;
   vp.vol.forEach((v, b) => {
     const mid = vp.lo + (b + 0.5) * vp.step;
-    // skip the bucket spot sits in: it is "here", not a level
-    if (mid + vp.step / 2 > spot && mid - vp.step / 2 < spot) return;
+    if (Math.abs(mid - spot) < minGap || v <= 0) return;
+    // Only local peaks count as shelves.
+    const left = vp.vol[b - 1] ?? 0;
+    const right = vp.vol[b + 1] ?? 0;
+    if (v < left || v < right) return;
     if (mid < spot && (!support || v > support.weight)) support = { price: mid, weight: v, distancePct: pctOf(mid, spot), kind: 'volume' };
     if (mid > spot && (!resistance || v > resistance.weight)) resistance = { price: mid, weight: v, distancePct: pctOf(mid, spot), kind: 'volume' };
   });
@@ -393,7 +410,10 @@ export function buildFlow(data: MarketData, windowId: WindowId, opts: { symbols?
     const rvol = data.market === 'us' ? relativeVolume(series, slice.candles, data.session?.open) : null;
     let takerBuyShare: number | null = null;
     const vol = slice.candles.reduce((s, c) => s + c.v, 0);
-    if (vol > 0 && slice.candles.every(c => c.tb != null)) takerBuyShare = slice.candles.reduce((s, c) => s + (c.tb ?? 0), 0) / vol;
+    // Taker split over the bars that carry it, when they cover most of the window.
+    const withTaker = slice.candles.filter(c => c.tb != null);
+    const takerVol = withTaker.reduce((s, c) => s + c.v, 0);
+    if (vol > 0 && withTaker.length >= slice.candles.length * 0.8 && takerVol > 0) takerBuyShare = withTaker.reduce((s, c) => s + (c.tb ?? 0), 0) / takerVol;
     const buildUp = buildUpOf(data.market, sign(changePct), oiChangePct, rvol);
     raws.push({ series, slice, changePct, side, confirmPct, oiChangePct, rvol, takerBuyShare, buildUp });
   }

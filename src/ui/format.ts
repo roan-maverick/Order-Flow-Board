@@ -4,6 +4,9 @@ export const signedPct = (v: number | null | undefined, digits = 2) => {
   return `${v > 0 ? '+' : v < 0 ? '−' : ''}${abs.toFixed(abs >= 100 ? 0 : digits)}%`;
 };
 
+/** Tighter, for tiles: two decimals under 10%, one above. */
+export const tilePct = (v: number) => signedPct(v, Math.abs(v) >= 10 ? 1 : 2);
+
 /** Prices from $0.000012 to $104,000 with sensible precision. */
 export function price(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return '—';

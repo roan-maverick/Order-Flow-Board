@@ -1,20 +1,53 @@
 {
   "name": "global-order-flow",
-  "version": "1.0.0",
-  "description": "A live board of where the money is flowing across crypto perpetuals and US stocks: bulls above zero, bears below, every name on its own path to a card.",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview --port 5199",
-    "test": "vitest run",
-    "typecheck": "tsc",
-    "data:us": "node scripts/build-us-data.mjs"
-  },
+  "version": "2.0.0",
+  "description": "Free, open-source order-flow board for the S&P 500 and crypto perpetuals: every name on one live screen, bulls above zero, bears below, with build-up, conviction checks, levels, a JSON API and an AI (MCP) connection.",
+  "keywords": [
+    "order-flow",
+    "sp500",
+    "stocks",
+    "crypto",
+    "perpetual-futures",
+    "open-interest",
+    "trading-dashboard",
+    "market-breadth",
+    "options",
+    "mcp",
+    "ai-trading"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roan-maverick/order-flow-open.git"
+  },
+  "homepage": "https://github.com/roan-maverick/order-flow-open#readme",
+  "bugs": {
+    "url": "https://github.com/roan-maverick/order-flow-open/issues"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "vite build --logLevel warn && tsx server/index.ts",
+    "demo": "vite build --logLevel warn && tsx server/index.ts --demo",
+    "dev": "tsx server/index.ts --dev",
+    "flow": "tsx scripts/flow.ts",
+    "mcp": "node server/mcp.mjs",
+    "paper-bot": "node examples/paper-bot.mjs",
+    "update:sp500": "tsx scripts/update-sp500.ts",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "html-to-image": "^1.11.13",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
@@ -24,10 +57,5 @@
     "typescript": "5.8",
     "vite": "^6.4.5",
     "vitest": "^3.2.7"
-  },
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": ">=20"
   }
 }

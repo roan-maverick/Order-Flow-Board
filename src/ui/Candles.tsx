@@ -69,6 +69,8 @@ export function Candles({ candles, width, height, max = 40, support, resistance,
       </g>
     );
   };
+  // Skip an axis price where a support/resistance label already sits.
+  const levelNear = (yy: number) => [support, resistance].some(lv => lv && lv.price >= lo && lv.price <= hi && Math.abs(y(lv.price) - yy) < 13);
   const ticks = detailed ? [0, 0.25, 0.5, 0.75, 1].map(f => bars[Math.min(bars.length - 1, Math.round(f * (bars.length - 1)))]) : [];
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={`candles ${className ?? ''}`}>
@@ -90,8 +92,8 @@ export function Candles({ candles, width, height, max = 40, support, resistance,
       })}
       {detailed && (
         <g className="axis" fill={pal.muted} fontSize={10.5} fontFamily={MONO}>
-          <text x={plotW + 4} y={padT + 8}>{price(hi)}</text>
-          <text x={plotW + 4} y={padT + plotH}>{price(lo)}</text>
+          {!levelNear(padT + 4) && <text x={plotW + 4} y={padT + 8}>{price(hi)}</text>}
+          {!levelNear(padT + plotH - 4) && <text x={plotW + 4} y={padT + plotH}>{price(lo)}</text>}
           {ticks.map((b, i) => <text key={i} x={tx(b.t)} y={height - 4} textAnchor={i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle'}>{clock(b.t, timeZone)}</text>)}
         </g>
       )}

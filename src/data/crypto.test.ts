@@ -4,6 +4,7 @@ import { buildFlow } from '../model/flow';
 
 const NOW = Date.parse('2026-11-08T10:00:00Z');
 const BAR = 300_000;
+const ALTS = ['SOL', 'XRP', 'DOGE', 'ADA', 'AVAX', 'LINK', 'SUI', 'TON', 'DOT', 'NEAR', 'APT', 'LTC'];
 
 /** Responses shaped like the venues' documented public endpoints. */
 function binanceRoutes(blocked = false) {
@@ -16,7 +17,8 @@ function binanceRoutes(blocked = false) {
         { symbol: 'ETHUSDT', quoteVolume: '7000000000', lastPrice: '3600' },
         { symbol: '1000PEPEUSDT', quoteVolume: '900000000', lastPrice: '0.0078' },
         { symbol: 'USDCUSDT', quoteVolume: '99999999999', lastPrice: '1' },
-        ...Array.from({ length: 12 }, (_, i) => ({ symbol: `ALT${i}USDT`, quoteVolume: String(1e8 - i), lastPrice: '1' })),
+        ...ALTS.map((a, i) => ({ symbol: `${a}USDT`, quoteVolume: String(1e8 - i), lastPrice: '1' })),
+        { symbol: 'XAUUSDT', quoteVolume: '99999999999', lastPrice: '4000' }, // tokenised gold: not a coin
       ]);
     }
     if (u.pathname === '/fapi/v1/premiumIndex') return Response.json([{ symbol: 'BTCUSDT', lastFundingRate: '0.00010000' }]);
@@ -24,7 +26,7 @@ function binanceRoutes(blocked = false) {
       const sym = u.searchParams.get('symbol')!;
       const n = Number(u.searchParams.get('limit'));
       const p0 = sym === 'BTCUSDT' ? 100000 : sym === '1000PEPEUSDT' ? 0.0075 : 1;
-      const up = sym.includes('ALT1') ? -1 : 1;
+      const up = sym === 'XRPUSDT' ? -1 : 1;
       return Response.json(Array.from({ length: n }, (_, i) => {
         const t = NOW - (n - i) * BAR;
         const c = p0 * (1 + up * 0.0001 * i);
@@ -46,7 +48,7 @@ function binanceRoutes(blocked = false) {
         return Response.json({ retCode: 0, retMsg: 'OK', result: { list: [
           { symbol: 'BTCUSDT', turnover24h: '9e9', fundingRate: '0.0001', openInterestValue: '7e9' },
           { symbol: 'ETHUSDT', turnover24h: '7e9', fundingRate: '0.0001', openInterestValue: '4e9' },
-          ...Array.from({ length: 12 }, (_, i) => ({ symbol: `ALT${i}USDT`, turnover24h: String(1e8 - i), fundingRate: '0', openInterestValue: '1e6' })),
+          ...ALTS.map((a, i) => ({ symbol: `${a}USDT`, turnover24h: String(1e8 - i), fundingRate: '0', openInterestValue: '1e6' })),
         ] } });
       }
       if (u.pathname === '/v5/market/kline') {
@@ -62,6 +64,33 @@ function binanceRoutes(blocked = false) {
         const cursor = u.searchParams.get('cursor');
         const offset = cursor ? 200 : 0;
         return Response.json({ retCode: 0, retMsg: 'OK', result: { nextPageCursor: cursor ? '' : 'page2', list: Array.from({ length: n }, (_, i) => ({ openInterest: String(5000 - offset - i), timestamp: String(NOW - (offset + i + 1) * BAR) })) } });
+      }
+    }
+    if (u.host === 'api.gateio.ws') {
+      if (u.pathname.endsWith('/tickers')) {
+        return Response.json([
+          { contract: 'BTC_USDT', last: '104000', volume_24h_quote: '9000000000', funding_rate: '0.0001' },
+          { contract: 'ETH_USDT', last: '3600', volume_24h_quote: '7000000000', funding_rate: '0.0001' },
+          { contract: 'NVDA_USDT', last: '180', volume_24h_quote: '8000000000', funding_rate: '0' }, // tokenised stock: not a coin
+          ...ALTS.map((a, i) => ({ contract: `${a}_USDT`, last: '1', volume_24h_quote: String(1e8 - i), funding_rate: '0' })),
+        ]);
+      }
+      if (u.pathname.endsWith('/candlesticks')) {
+        const n = Number(u.searchParams.get('limit'));
+        return Response.json(Array.from({ length: n }, (_, i) => {
+          const t = (NOW - (n - i) * BAR) / 1000;
+          const c = 1 + 0.0001 * i;
+          return { t, o: String(c), h: String(c), l: String(c), c: String(c), v: 1000, sum: String(100 * c) };
+        }));
+      }
+      if (u.pathname.endsWith('/contract_stats')) {
+        const from = Number(u.searchParams.get('from'));
+        const limit = Number(u.searchParams.get('limit'));
+        const rows = [];
+        for (let t = Math.ceil(from / 300) * 300, k = 0; t * 1000 <= NOW && k < limit; t += 300, k++) {
+          rows.push({ time: t, open_interest: 5000 + k, open_interest_usd: (5000 + k) * 10, long_taker_size: 60, short_taker_size: 40 });
+        }
+        return Response.json(rows);
       }
     }
     return new Response('not found', { status: 404 });
@@ -91,9 +120,10 @@ describe('live crypto feed (mocked venues)', () => {
 
     const flow = buildFlow({ ...data, asOf: NOW }, '24h');
     expect(flow.assets.length).toBe(10);
-    const alt1 = flow.assets.find(a => a.symbol === 'ALT1')!;
-    expect(alt1.side).toBe('bearish');
-    expect(alt1.buildUp.code).toBe('SHORT_BUILD');
+    expect(data.assets.some(a => a.symbol === 'XAU')).toBe(false);
+    const xrp = flow.assets.find(a => a.symbol === 'XRP')!;
+    expect(xrp.side).toBe('bearish');
+    expect(xrp.buildUp.code).toBe('SHORT_BUILD');
     expect(flow.assets.find(a => a.symbol === 'BTC')!.resistance?.price).toBe(110000);
   });
 
@@ -117,6 +147,28 @@ describe('live crypto feed (mocked venues)', () => {
     expect(btc.oi!.length).toBeGreaterThan(200); // two pages of OI history
     const flow = buildFlow({ ...data, asOf: NOW }, '4h');
     expect(flow.bullish.length + flow.bearish.length + flow.rangebound.length).toBe(8);
+  });
+
+  it('falls back to Gate.io where Binance and Bybit refuse (e.g. the US)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    const route = binanceRoutes(true);
+    mockFetch(url => (new URL(url).host === 'api.bybit.com' ? new Response('{}', { status: 403 }) : route(url)));
+    const { data, feed } = await loadCrypto(8);
+    expect(data.source).toBe('Gate.io perps');
+    expect(data.assets.map(a => a.symbol).slice(0, 2)).toEqual(['BTC', 'ETH']);
+    expect(data.assets.some(a => a.symbol === 'NVDA')).toBe(false);
+    const btc = data.assets.find(a => a.symbol === 'BTC')!;
+    expect(btc.oi!.length).toBeGreaterThan(250); // paged OI history
+    expect(btc.candles.at(-1)!.tb).toBeCloseTo(btc.candles.at(-1)!.v * 0.6);
+    expect(btc.venueSymbol).toBe('BTC_USDT');
+    const flow = buildFlow({ ...data, asOf: NOW }, '24h');
+    const sol = flow.assets.find(a => a.symbol === 'SOL')!;
+    expect(sol.takerBuyShare).toBeCloseTo(0.6);
+    expect(sol.buildUp.code).toBe('LONG_BUILD');
+    const next = await feed.refresh(data);
+    expect(next.assets.length).toBe(8);
+    vi.useRealTimers();
   });
 
   it('reports why when no venue answers', async () => {

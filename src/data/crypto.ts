@@ -8,7 +8,9 @@ import { BAR, MIN } from './time';
  *
  *  1. Binance USDⓈ-M futures (taker volume + 5-minute open interest history).
  *  2. Bybit linear perps, when Binance is unreachable (some regions block it).
- *  3. Deribit option open interest for BTC and ETH: the put and call walls.
+ *  3. Gate.io USDT perps, which also answer from the United States, where
+ *     Binance and Bybit refuse connections.
+ *  4. Deribit option open interest for BTC and ETH: the put and call walls.
  */
 
 const LOOKBACK_BARS = 48 * 12; // 48h of 5-minute bars: 24h window plus a day for volume levels
@@ -20,15 +22,20 @@ export interface CryptoFeed {
   refresh(data: MarketData): Promise<MarketData>;
 }
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 async function getJson<T>(url: string, init?: RequestInit, timeoutMs = 12_000): Promise<T> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...init, signal: ctrl.signal });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timer);
+  for (let attempt = 0; ; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...init, signal: ctrl.signal });
+      if (res.status === 429 && attempt < 2) { await sleep(1000 * (attempt + 1)); continue; } // the venue asked us to slow down
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      return (await res.json()) as T;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -213,14 +220,107 @@ export const bybitFeed: CryptoFeed = {
   },
 };
 
+/* ---------------------------------------------------------------- Gate.io */
+
+const GATE = 'https://api.gateio.ws/api/v4/futures/usdt';
+const GATE_STATS_PAGE = 100;
+
+interface GateTicker { contract: string; last: string; volume_24h_quote: string; funding_rate: string }
+interface GateCandle { t: number; o: string; h: string; l: string; c: string; v: number; sum: string }
+interface GateStat { time: number; open_interest: number; open_interest_usd: number; long_taker_size: number; short_taker_size: number }
+
+/** Gate counts volume in contracts; the quote turnover divided by price gives base units. */
+export const gateCandle = (k: GateCandle): Candle => {
+  const c = +k.c;
+  return { t: k.t * 1000, o: +k.o, h: +k.h, l: +k.l, c, v: c > 0 ? +k.sum / c : 0 };
+};
+
+async function gateStats(contract: string, from: number): Promise<GateStat[]> {
+  const out: GateStat[] = [];
+  let cursor = Math.floor(from / 1000);
+  for (let page = 0; page < 4; page++) {
+    const rows = await getJson<GateStat[]>(`${GATE}/contract_stats?contract=${contract}&interval=5m&from=${cursor}&limit=${GATE_STATS_PAGE}`);
+    out.push(...rows);
+    if (rows.length < GATE_STATS_PAGE) break;
+    cursor = rows[rows.length - 1].time + 300;
+  }
+  return out;
+}
+
+/** Adds the aggressive-buy share from Gate's stats onto the matching candles. */
+export function withGateTaker(candles: Candle[], stats: GateStat[]): Candle[] {
+  const share = new Map<number, number>();
+  for (const s of stats) {
+    const total = s.long_taker_size + s.short_taker_size;
+    if (total > 0) share.set(s.time * 1000, s.long_taker_size / total);
+  }
+  return candles.map(c => (share.has(c.t) ? { ...c, tb: c.v * share.get(c.t)! } : c));
+}
+
+const gateOi = (stats: GateStat[]): OIPoint[] => stats.filter(s => s.open_interest > 0).map(s => ({ t: s.time * 1000, oi: s.open_interest }));
+
+export const gateFeed: CryptoFeed = {
+  async load(count) {
+    const tickers = await getJson<GateTicker[]>(`${GATE}/tickers`);
+    const byVenue = new Map(tickers.map(t => [t.contract.replace('_', ''), t]));
+    const picked = pickUniverse(tickers.map(t => ({ venue: t.contract.replace('_', ''), turnover: +t.volume_24h_quote })), count);
+    const now = Date.now();
+    const assets = await pool(picked, 4, async ({ venue, base, mult }) => {
+      const contract = byVenue.get(venue)!.contract;
+      try {
+        const [klines, stats] = await Promise.all([
+          getJson<GateCandle[]>(`${GATE}/candlesticks?contract=${contract}&interval=5m&limit=${LOOKBACK_BARS}`),
+          gateStats(contract, now - OI_BARS * BAR).catch(() => [] as GateStat[]),
+        ]);
+        const candles = withGateTaker(klines.map(gateCandle), stats);
+        const asset = toAsset(venue, base, mult, candles, gateOi(stats), stats.at(-1)?.open_interest_usd ?? null, +byVenue.get(venue)!.funding_rate);
+        if (asset) asset.venueSymbol = contract;
+        return asset;
+      } catch {
+        return null;
+      }
+    });
+    const ok = assets.filter((a): a is AssetSeries => a != null);
+    if (ok.length < Math.min(10, picked.length)) throw new Error('Gate answered for too few perps');
+    await attachDeribit(ok);
+    return { market: 'crypto', source: 'Gate.io perps', live: true, asOf: now, benchmark: 'BTC', assets: ok };
+  },
+
+  async refresh(data) {
+    const now = Date.now();
+    const tickers = await getJson<GateTicker[]>(`${GATE}/tickers`).catch(() => [] as GateTicker[]);
+    const funding = new Map(tickers.map(t => [t.contract, +t.funding_rate]));
+    const assets = await pool(data.assets, 4, async a => {
+      const contract = a.venueSymbol ?? `${a.symbol}_USDT`;
+      try {
+        const [klines, stats] = await Promise.all([
+          getJson<GateCandle[]>(`${GATE}/candlesticks?contract=${contract}&interval=5m&limit=3`),
+          getJson<GateStat[]>(`${GATE}/contract_stats?contract=${contract}&interval=5m&from=${Math.floor((now - 20 * 60_000) / 1000)}&limit=6`).catch(() => [] as GateStat[]),
+        ]);
+        return {
+          ...a,
+          candles: mergeBars(a.candles, withGateTaker(klines.map(gateCandle), stats), LOOKBACK_BARS),
+          oi: mergeBars(a.oi ?? [], gateOi(stats), OI_BARS),
+          oiUsd: stats.at(-1)?.open_interest_usd ?? a.oiUsd,
+          funding: funding.get(contract) ?? a.funding,
+        };
+      } catch {
+        return a;
+      }
+    });
+    return { ...data, asOf: now, assets };
+  },
+};
+
 /* ---------------------------------------------------------------- shared */
 
-/** The most-traded perps by 24h turnover; BTC and ETH always included. */
+/** The most-traded perps by 24h turnover among the coins in universe.ts; BTC and ETH always included. */
 export function pickUniverse(rows: Array<{ venue: string; turnover: number }>, count: number) {
   const seen = new Set<string>();
   const parsed = rows
     .map(r => ({ ...r, p: parseSymbol(r.venue) }))
-    .filter((r): r is typeof r & { p: { base: string; mult: number } } => r.p != null && Number.isFinite(r.turnover))
+    // Known coins only: venues also list tokenised stocks, gold and oil as perps.
+    .filter((r): r is typeof r & { p: { base: string; mult: number } } => r.p != null && Number.isFinite(r.turnover) && r.p.base in CRYPTO_ASSETS)
     .sort((a, b) => b.turnover - a.turnover);
   const out: Array<{ venue: string; base: string; mult: number }> = [];
   for (const must of ['BTC', 'ETH']) {
@@ -291,9 +391,16 @@ async function attachDeribit(assets: AssetSeries[]) {
 }
 
 /** Tries each venue in turn. */
-export async function loadCrypto(count: number): Promise<{ data: MarketData; feed: CryptoFeed }> {
+export type Exchange = 'binance' | 'bybit' | 'gate';
+
+export const FEEDS: Record<Exchange, CryptoFeed> = { binance: binanceFeed, bybit: bybitFeed, gate: gateFeed };
+
+/** Tries each exchange in turn (or only the one asked for) and returns the first that answers. */
+export async function loadCrypto(count: number, exchange: Exchange | 'auto' = 'auto'): Promise<{ data: MarketData; feed: CryptoFeed }> {
   const errors: string[] = [];
-  for (const feed of [binanceFeed, bybitFeed]) {
+  const order = exchange === 'auto' ? Object.values(FEEDS) : [FEEDS[exchange]].filter((f): f is CryptoFeed => !!f);
+  if (!order.length) throw new Error(`unknown exchange ${exchange}`);
+  for (const feed of order) {
     try {
       return { data: await feed.load(count), feed };
     } catch (e) {

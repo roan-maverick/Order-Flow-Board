@@ -1,0 +1,33 @@
+{
+  "port": 5199,
+  "host": "127.0.0.1",
+  "us": {
+    "enabled": true,
+    "refreshMinutes": 3,
+    "optionWalls": true,
+    "optionsTop": 100,
+    "optionsHours": 8,
+    "popular": [
+      ["MSTR", "Strategy"],
+      ["TSM", "TSMC"],
+      ["ARM", "Arm Holdings"],
+      ["ASML", "ASML"],
+      ["SHOP", "Shopify"],
+      ["SOFI", "SoFi"],
+      ["HIMS", "Hims & Hers"],
+      ["RKLB", "Rocket Lab"],
+      ["IONQ", "IonQ"],
+      ["CRWV", "CoreWeave"],
+      ["IREN", "IREN"],
+      ["MARA", "MARA Holdings"],
+      ["RIOT", "Riot Platforms"],
+      ["IBIT", "iShares Bitcoin ETF"]
+    ]
+  },
+  "crypto": {
+    "enabled": true,
+    "count": 80,
+    "refreshSeconds": 60,
+    "exchange": "auto"
+  }
+}

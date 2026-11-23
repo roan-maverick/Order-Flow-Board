@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildFlow, optionLevels, sliceWindow, volumeLevels } from './flow';
-import { demoCrypto, demoUs } from '../data/demo';
+import { demoCrypto, demoUs, demoUsNames } from '../data/demo';
 import { deribitStrikes, parseDeribit, parseSymbol, pickUniverse } from '../data/crypto';
 import type { AssetSeries, Candle, MarketData } from '../data/types';
 
@@ -134,11 +134,21 @@ describe('demo markets', () => {
   it('builds a US session with relative volume and option walls', () => {
     const data = demoUs(NOW);
     const flow = buildFlow(data, 'day');
-    expect(flow.assets.length).toBe(70);
+    expect(flow.assets.length).toBe(demoUsNames().length);
+    expect(flow.sectors.map(s => s.label)).toContain('Technology');
     const nvda = flow.assets.find(a => a.symbol === 'NVDA')!;
     expect(nvda.rvol).not.toBeNull();
     expect(nvda.support?.kind).toBe('options');
     expect(['ACCUMULATION', 'DRIFT_UP', 'DISTRIBUTION', 'DRIFT_DOWN', 'NEUTRAL']).toContain(nvda.buildUp.code);
-    for (const w of ['1h', '15m'] as const) expect(buildFlow(data, w).assets.length).toBe(70);
+    for (const w of ['1h', '15m'] as const) expect(buildFlow(data, w).assets.length).toBe(demoUsNames().length);
+  });
+});
+
+describe('confirm window', () => {
+  it('checks the crypto 1h window against the last 15 minutes, not 24 hours', () => {
+    const flow = buildFlow(demoCrypto(NOW), '1h');
+    const check = flow.assets[0].checks.find(c => c.id === 'confirm')!;
+    expect(check.label).toBe('The last 15 minutes agrees');
+    expect(check.note).toContain('over the last 15 minutes');
   });
 });

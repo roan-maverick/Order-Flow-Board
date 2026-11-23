@@ -1,14 +1,35 @@
 export const MIN = 60_000;
 export const BAR = 5 * MIN;
 
-/** Minutes east of UTC for a time zone at a moment (e.g. New York: -240 or -300). */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+const offsets = new Map<string, number>();
+const HOUR = 60 * MIN;
+
+/**
+ * Minutes east of UTC for a time zone at a moment (e.g. New York: -240 or -300).
+ * Offsets only change on the hour (daylight saving), so each hour is worked out
+ * once and remembered: this runs for every bar of every stock.
+ */
 export function zoneOffsetMinutes(at: number, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(at));
+  const hour = Math.floor(at / HOUR);
+  const key = `${timeZone}|${hour}`;
+  const known = offsets.get(key);
+  if (known != null) return known;
+  let fmt = formatters.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    formatters.set(timeZone, fmt);
+  }
+  const probe = hour * HOUR;
+  const parts = fmt.formatToParts(new Date(probe));
   const get = (type: string) => Number(parts.find(p => p.type === type)?.value);
   const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
-  return Math.round((asUtc - Math.floor(at / 1000) * 1000) / MIN);
+  const offset = Math.round((asUtc - probe) / MIN);
+  if (offsets.size > 50_000) offsets.clear();
+  offsets.set(key, offset);
+  return offset;
 }
 
 /** Epoch ms of a wall-clock time on a New York date (YYYY-MM-DD). */
@@ -36,5 +57,8 @@ export function lastUsSession(at: number): { date: string; open: number; close: 
   }
   throw new Error('no session found');
 }
+
+/** The regular session (09:30–16:00 New York) of a New York date. */
+export const usSessionOf = (date: string) => ({ open: nyTime(date, 9, 30), close: nyTime(date, 16, 0) });
 
 export const floorTo = (t: number, step: number) => Math.floor(t / step) * step;
