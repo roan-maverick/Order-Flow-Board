@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// BASE_PATH is set by the GitHub Pages workflow (/<repo>/); local dev serves from /.
+// The board is served from / by the local server (npm start). Set BASE_PATH to host the page under a sub-path.
 export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   plugins: [react()],
