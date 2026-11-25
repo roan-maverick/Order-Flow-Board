@@ -2,7 +2,7 @@
  * One place for outbound requests: a timeout, a polite user agent, and
  * retries with back-off when a provider says "slow down" (429) or hiccups (5xx).
  */
-export const USER_AGENT = 'Mozilla/5.0 (compatible; GlobalOrderFlow/2.0; +https://github.com/roan-maverick/order-flow-open)';
+export const USER_AGENT = 'Mozilla/5.0 (compatible; GlobalOrderFlow/2.0; +https://github.com/roan-maverick/Order-Flow-Board)';
 
 export interface RequestStats {
   requests: number;

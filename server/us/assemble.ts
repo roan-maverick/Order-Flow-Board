@@ -21,6 +21,8 @@ export interface SymbolState {
   officialPrev?: { date: string; close: number };
   /** Yahoo's regular session for the latest date (start/end, catches half days). */
   regular?: { start: number; end: number } | null;
+  /** Yahoo's official latest price and its time: after the close this is the closing auction, which 5-minute bars miss. */
+  lastPrice?: { t: number; price: number } | null;
   options?: (OptionsBook & { fetchedAt: number }) | null;
   error?: string;
 }
@@ -93,13 +95,21 @@ export function assembleUs(states: SymbolState[], opts: AssembleOptions): Market
     }
     for (let i = 0; i < SESSION_SLOTS; i++) avgSlotVol[i] = counts[i] ? Math.round(avgSlotVol[i] / counts[i]) : 0;
 
-    lastBarEnd = Math.max(lastBarEnd, today.bars[today.bars.length - 1].t + BAR);
+    // Finish the last bar at the official price when it belongs to that bar (or the closing auction right after it).
+    let todayBars = today.bars;
+    const last = todayBars[todayBars.length - 1];
+    const lp = s.lastPrice;
+    if (lp && lp.price > 0 && lp.t >= last.t && lp.t <= last.t + BAR + 2 * 60_000 && Math.abs(lp.price / last.c - 1) < 0.1) {
+      todayBars = [...todayBars.slice(0, -1), { ...last, c: lp.price, h: Math.max(last.h, lp.price), l: Math.min(last.l, lp.price) }];
+    }
+
+    lastBarEnd = Math.max(lastBarEnd, last.t + BAR);
     assets.push({
       symbol: s.symbol,
       name: s.name,
       sector: s.sector,
       group: s.group,
-      candles: [...prevSession.bars, ...today.bars].map(tidy),
+      candles: [...prevSession.bars, ...todayBars].map(tidy),
       prevClose,
       avgSlotVol,
       options: s.options ? { callVol: s.options.callVol, putVol: s.options.putVol, strikes: s.options.strikes } : null,

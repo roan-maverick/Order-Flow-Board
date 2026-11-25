@@ -59,6 +59,23 @@ export function lastUsSession(at: number): { date: string; open: number; close: 
 }
 
 /** The regular session (09:30–16:00 New York) of a New York date. */
+/**
+ * The next weekday at 09:36 New York time after `at`: a few minutes past the
+ * open, once the first 5-minute bar of the day exists. Holidays are not known
+ * here; on a holiday the check simply finds no new session and tries again.
+ */
+export function nextUsOpenCheck(at: number): number {
+  const today = nyDate(at).date;
+  for (let d = 0; d <= 7; d++) {
+    const date = new Date(Date.parse(`${today}T12:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
+    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
+    const t = nyTime(date, 9, 36);
+    if (t > at) return t;
+  }
+  return at + 24 * 60 * MIN;
+}
+
 export const usSessionOf = (date: string) => ({ open: nyTime(date, 9, 30), close: nyTime(date, 16, 0) });
 
 export const floorTo = (t: number, step: number) => Math.floor(t / step) * step;

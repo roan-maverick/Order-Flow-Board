@@ -18,16 +18,16 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/roan-maverick/order-flow-open.git"
+    "url": "https://github.com/roan-maverick/Order-Flow-Board.git"
   },
-  "homepage": "https://github.com/roan-maverick/order-flow-open#readme",
+  "homepage": "https://github.com/roan-maverick/Order-Flow-Board#readme",
   "bugs": {
-    "url": "https://github.com/roan-maverick/order-flow-open/issues"
+    "url": "https://github.com/roan-maverick/Order-Flow-Board/issues"
   },
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.12"
   },
   "scripts": {
     "start": "vite build --logLevel warn && tsx server/index.ts",

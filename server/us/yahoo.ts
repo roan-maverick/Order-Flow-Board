@@ -15,7 +15,9 @@ export interface YahooSeries {
   chartPreviousClose: number | null;
   /** Today's regular session as Yahoo reports it (handles half days). */
   regular: { start: number; end: number } | null;
+  /** Yahoo's official latest price (after the close: the closing auction) and its time. */
   marketPrice: number | null;
+  marketTime: number | null;
 }
 
 interface YahooChart {
@@ -25,6 +27,7 @@ interface YahooChart {
         chartPreviousClose?: number;
         previousClose?: number;
         regularMarketPrice?: number;
+        regularMarketTime?: number;
         currentTradingPeriod?: { regular?: { start: number; end: number } };
       };
       timestamp?: number[];
@@ -69,6 +72,7 @@ export function parseYahooChart(json: YahooChart): YahooSeries {
     chartPreviousClose: r.meta?.chartPreviousClose ?? r.meta?.previousClose ?? null,
     regular: reg ? { start: reg.start * 1000, end: reg.end * 1000 } : null,
     marketPrice: r.meta?.regularMarketPrice ?? null,
+    marketTime: r.meta?.regularMarketTime ? r.meta.regularMarketTime * 1000 : null,
   };
 }
 

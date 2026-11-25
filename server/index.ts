@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { handleApi, VERSION } from './api';
 import { loadConfig, ROOT } from './config';
@@ -49,8 +49,15 @@ async function onApi(req: IncomingMessage, res: ServerResponse, url: URL) {
 }
 
 function onStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
-  let path = normalize(join(dist, decodeURIComponent(url.pathname)));
-  if (!path.startsWith(dist)) { res.writeHead(403); res.end(); return; }
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(url.pathname);
+  } catch {
+    send(req, res, 400, 'Bad request', TYPES['.txt']);
+    return;
+  }
+  let path = normalize(join(dist, decoded));
+  if (path !== dist && !path.startsWith(dist + sep)) { send(req, res, 403, 'Forbidden', TYPES['.txt']); return; }
   if (!existsSync(path) || statSync(path).isDirectory()) path = join(dist, 'index.html');
   if (!existsSync(path)) {
     send(req, res, 500, 'The board has not been built yet. Run "npm start" (it builds first) or "npm run dev".', TYPES['.txt']);
@@ -59,7 +66,7 @@ function onStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
   const ext = extname(path);
   const immutable = url.pathname.startsWith('/assets/');
   res.writeHead(200, { 'content-type': TYPES[ext] ?? 'application/octet-stream', 'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
-  createReadStream(path).pipe(res);
+  createReadStream(path).on('error', () => res.destroy()).pipe(res);
 }
 
 async function main() {
@@ -73,10 +80,17 @@ async function main() {
   }
 
   const server = createServer((req, res) => {
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) { void onApi(req, res, url); return; }
-    if (vite) vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
-    else onStatic(req, res, url);
+    // No single request, however malformed, may take the server down.
+    try {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      if (url.pathname === '/api' || url.pathname.startsWith('/api/')) { void onApi(req, res, url); return; }
+      if (vite) vite.middlewares(req, res, () => { res.writeHead(404); res.end(); });
+      else onStatic(req, res, url);
+    } catch (e) {
+      log(`Bad request ${JSON.stringify(req.url)}: ${e instanceof Error ? e.message : e}`);
+      if (!res.headersSent) send(req, res, 400, 'Bad request', TYPES['.txt']);
+      else res.destroy();
+    }
   });
 
   server.on('error', (e: NodeJS.ErrnoException) => {

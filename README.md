@@ -11,7 +11,7 @@ You see the whole market at once, and for each name whether real money is behind
 
 **Free · open source (MIT) · runs on your own computer · no API keys · no sign-up**
 
-[![Tests](https://github.com/roan-maverick/order-flow-open/actions/workflows/ci.yml/badge.svg)](https://github.com/roan-maverick/order-flow-open/actions/workflows/ci.yml)
+[![Tests](https://github.com/roan-maverick/Order-Flow-Board/actions/workflows/ci.yml/badge.svg)](https://github.com/roan-maverick/Order-Flow-Board/actions/workflows/ci.yml)
 
 [Quick start](#quick-start) · [How to read it](#how-to-read-the-board) · [Use it with AI](#use-it-with-ai) · [Build an AI trading system](#build-your-own-ai-trading-system) · [API](#the-json-api) · [FAQ](#faq)
 
@@ -51,11 +51,11 @@ Then it gives all of that to you **as data**: copy it into any AI chat with one 
 
 ## Quick start
 
-You need **Node.js 20 or newer** ([download it here](https://nodejs.org), pick "LTS"). Check with `node -v`.
+You need **Node.js 22 or newer** ([download it here](https://nodejs.org), pick "LTS"). Check with `node -v`.
 
 ```bash
-git clone https://github.com/roan-maverick/order-flow-open.git
-cd order-flow-open
+git clone https://github.com/roan-maverick/Order-Flow-Board.git
+cd Order-Flow-Board
 npm install
 npm start
 ```
@@ -150,18 +150,18 @@ The board includes an **MCP server**, the standard way to give AI assistants too
   "mcpServers": {
     "global-order-flow": {
       "command": "node",
-      "args": ["/full/path/to/order-flow-open/server/mcp.mjs"]
+      "args": ["/full/path/to/Order-Flow-Board/server/mcp.mjs"]
     }
   }
 }
 ```
 
-On Windows, write the path with double backslashes: `"C:\\Users\\you\\order-flow-open\\server\\mcp.mjs"`. Restart Claude Desktop.
+On Windows, write the path with double backslashes: `"C:\\Users\\you\\Order-Flow-Board\\server\\mcp.mjs"`. Restart Claude Desktop.
 
 **Claude Code:**
 
 ```bash
-claude mcp add --transport stdio global-order-flow -- node /full/path/to/order-flow-open/server/mcp.mjs
+claude mcp add --transport stdio global-order-flow -- node /full/path/to/Order-Flow-Board/server/mcp.mjs
 ```
 
 Keep the board running (`npm start`), then just ask:
@@ -319,7 +319,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 
-The board idea (bulls above zero, bears below, tunnels to cards) is inspired by [Order Flow](https://github.com/MrChartist/order-flow) by Mr. Chartist, built for Indian F&O. This is an independent implementation for global markets, written from scratch.
+The board idea (bulls above zero, bears below, tunnels to cards) and the reading method (build-up quadrants, the confirmation checks and the 45/35/20 strength mix) come from [Order Flow](https://github.com/MrChartist/order-flow) by Mr. Chartist, built for Indian F&O. This project is an independent implementation for global markets, written from scratch; it contains none of Order Flow's code.
 
 ## Disclaimer
 

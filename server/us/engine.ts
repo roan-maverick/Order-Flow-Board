@@ -8,6 +8,7 @@ import { assembleUs, mergeBars, sessions, type SymbolState } from './assemble';
 import { fetchCboe } from './cboe';
 import { parseConstituents, SP500_CSV_URL, type Constituent } from './sp500';
 import { fetchYahoo } from './yahoo';
+import { nextUsOpenCheck } from '../../src/data/time';
 
 /**
  * Keeps the US board fresh.
@@ -18,7 +19,8 @@ import { fetchYahoo } from './yahoo';
  *  - While the market is open: pulls today's bars for every name every few
  *    minutes. If Yahoo starts saying "slow down", it waits longer between rounds.
  *  - While it is closed: one last round after the close, then a cheap check
- *    every 30 minutes for the next session.
+ *    every 30 minutes for the next session, and always one at 09:36 New York
+ *    time on weekdays so a new session is picked up within minutes.
  *  - In the background: option chains (put and call walls), busiest names
  *    first, about once a day each.
  */
@@ -150,6 +152,10 @@ export class UsEngine {
     await this.refresh('5d');
     if (this.stopped) return;
     this.status.phase = this.marketData() ? 'ready' : 'error';
+    // A quick 1-day pass straight away: it carries Yahoo's official previous close
+    // for every name, which the 5-day pass does not.
+    if (this.status.phase === 'ready') await this.refresh('1d');
+    if (this.stopped) return;
     if (this.status.phase === 'error') this.status.lastError = this.status.lastError ?? 'no US data could be loaded';
     void this.optionsLoop();
     this.schedule();
@@ -178,6 +184,7 @@ export class UsEngine {
             // With range=1d, chartPreviousClose is the official close before today's session.
             if (range === '1d' && y.chartPreviousClose && latestDate) state.officialPrev = { date: latestDate, close: y.chartPreviousClose };
             if (y.regular) state.regular = y.regular;
+            if (y.marketPrice && y.marketTime) state.lastPrice = { t: y.marketTime, price: y.marketPrice };
             state.error = undefined;
           }
           failStreak = 0;
@@ -233,7 +240,8 @@ export class UsEngine {
       wait = Math.max(MIN, data.session.close + 20 * MIN - now); // one last round once the closing bars settle
       next = async () => { await this.refresh('1d'); };
     } else {
-      wait = CLOSED_CHECK_MIN * MIN;
+      // Check every 30 minutes, but never sleep through the next open.
+      wait = Math.max(MIN, Math.min(CLOSED_CHECK_MIN * MIN, nextUsOpenCheck(now) - now));
       next = async () => {
         // Cheap check: has a new session started for the benchmark?
         const before = this.status.sessionDate;
@@ -303,6 +311,7 @@ export class UsEngine {
         state.bars = s.bars;
         state.officialPrev = s.officialPrev;
         state.regular = s.regular;
+        state.lastPrice = s.lastPrice;
         state.options = s.options;
         n++;
       }
