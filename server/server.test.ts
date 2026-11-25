@@ -36,7 +36,7 @@ describe('Yahoo bars', () => {
     const series = parseYahooChart({
       chart: {
         result: [{
-          meta: { chartPreviousClose: 100, currentTradingPeriod: { regular: { start: t0, end: t0 + 23_400 } } },
+          meta: { chartPreviousClose: 100, regularMarketPrice: 102.1, regularMarketTime: t0 + 740, currentTradingPeriod: { regular: { start: t0, end: t0 + 23_400 } } },
           timestamp: [t0, t0 + 300, t0 + 600, t0 + 737],
           indicators: { quote: [{ open: [100, null, 101, 101.5], high: [101, null, 102, 103], low: [99, null, 100.5, 101], close: [100.5, null, 101.5, 102], volume: [1000, null, 800, 50] }] },
         }],
@@ -46,6 +46,7 @@ describe('Yahoo bars', () => {
     expect(series.candles[1]).toMatchObject({ h: 103, c: 102, v: 850 });
     expect(series.chartPreviousClose).toBe(100);
     expect(series.regular).toEqual({ start: t0 * 1000, end: (t0 + 23_400) * 1000 });
+    expect(series).toMatchObject({ marketPrice: 102.1, marketTime: (t0 + 740) * 1000 });
   });
 });
 
@@ -108,6 +109,16 @@ describe('US session assembly', () => {
     const data = assembleUs([spy], { now: nyTime('2026-11-23', 20, 0), benchmark: 'SPY', source: 'test' })!;
     expect(data.marketOpen).toBe(false);
     expect(data.asOf).toBe(nyTime('2026-11-23', 16, 0));
+  });
+
+  it('ends the day at the official closing price, not the last 5-minute bar', () => {
+    const now = nyTime('2026-11-23', 20, 0);
+    const withAuction: SymbolState = { ...spy, lastPrice: { t: nyTime('2026-11-23', 16, 0) + 3000, price: 607.5 } };
+    const last = (d: ReturnType<typeof assembleUs>) => d!.assets[0].candles.at(-1)!;
+    expect(last(assembleUs([withAuction], { now, benchmark: 'SPY', source: 'test' })).c).toBe(607.5);
+    // A price from another day, or far from the bar, is ignored.
+    const stale: SymbolState = { ...spy, lastPrice: { t: nyTime('2026-11-20', 16, 0), price: 607.5 } };
+    expect(last(assembleUs([stale], { now, benchmark: 'SPY', source: 'test' })).c).toBeCloseTo(604.77);
   });
 
   it('merges fresh bars over stored ones', () => {

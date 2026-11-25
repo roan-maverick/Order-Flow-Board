@@ -152,6 +152,10 @@ export class UsEngine {
     await this.refresh('5d');
     if (this.stopped) return;
     this.status.phase = this.marketData() ? 'ready' : 'error';
+    // A quick 1-day pass straight away: it carries Yahoo's official previous close
+    // for every name, which the 5-day pass does not.
+    if (this.status.phase === 'ready') await this.refresh('1d');
+    if (this.stopped) return;
     if (this.status.phase === 'error') this.status.lastError = this.status.lastError ?? 'no US data could be loaded';
     void this.optionsLoop();
     this.schedule();
@@ -180,6 +184,7 @@ export class UsEngine {
             // With range=1d, chartPreviousClose is the official close before today's session.
             if (range === '1d' && y.chartPreviousClose && latestDate) state.officialPrev = { date: latestDate, close: y.chartPreviousClose };
             if (y.regular) state.regular = y.regular;
+            if (y.marketPrice && y.marketTime) state.lastPrice = { t: y.marketTime, price: y.marketPrice };
             state.error = undefined;
           }
           failStreak = 0;
@@ -306,6 +311,7 @@ export class UsEngine {
         state.bars = s.bars;
         state.officialPrev = s.officialPrev;
         state.regular = s.regular;
+        state.lastPrice = s.lastPrice;
         state.options = s.options;
         n++;
       }
