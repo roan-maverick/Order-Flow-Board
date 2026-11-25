@@ -7,7 +7,7 @@
 ### See where the money is flowing across the whole S&P 500 and crypto, live, on one screen.
 
 Every stock rises above the zero line or falls below it, and runs on its own path to a card.<br>
-You see the whole market at once, and for each name whether real money is behind the move.
+You see the whole market at once and for each name whether real money is behind the move.
 
 **Free · open source (MIT) · runs on your own computer · no API keys · no sign-up**
 
