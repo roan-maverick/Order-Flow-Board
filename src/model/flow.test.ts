@@ -3,6 +3,7 @@ import { buildFlow, optionLevels, sliceWindow, volumeLevels } from './flow';
 import { demoCrypto, demoUs, demoUsNames } from '../data/demo';
 import { deribitStrikes, parseDeribit, parseSymbol, pickUniverse } from '../data/crypto';
 import type { AssetSeries, Candle, MarketData } from '../data/types';
+import { nextUsOpenCheck } from '../data/time';
 
 const NOW = Date.parse('2026-11-06T18:45:00Z'); // a Friday, US session open
 
@@ -150,5 +151,17 @@ describe('confirm window', () => {
     const check = flow.assets[0].checks.find(c => c.id === 'confirm')!;
     expect(check.label).toBe('The last 15 minutes agrees');
     expect(check.note).toContain('over the last 15 minutes');
+  });
+});
+
+describe('US clock', () => {
+  const at = (iso: string) => Date.parse(iso);
+  it('wakes a few minutes after the next weekday open', () => {
+    // Wednesday 25 Nov 2026, 08:00 New York (EST, UTC-5) → same day 09:36
+    expect(new Date(nextUsOpenCheck(at('2026-11-25T13:00:00Z'))).toISOString()).toBe('2026-11-25T14:36:00.000Z');
+    // Friday evening → Monday 09:36
+    expect(new Date(nextUsOpenCheck(at('2026-11-27T23:00:00Z'))).toISOString()).toBe('2026-11-30T14:36:00.000Z');
+    // Summer time (EDT, UTC-4), Saturday → Monday
+    expect(new Date(nextUsOpenCheck(at('2026-07-11T15:00:00Z'))).toISOString()).toBe('2026-07-13T13:36:00.000Z');
   });
 });

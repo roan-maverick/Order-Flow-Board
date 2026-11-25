@@ -4,5 +4,5 @@ export const BRAND = {
   tagline: 'Where the world’s money is flowing, live.',
   author: 'Roan Maverick',
   authorUrl: 'https://github.com/roan-maverick',
-  repoUrl: 'https://github.com/roan-maverick/order-flow-open',
+  repoUrl: 'https://github.com/roan-maverick/Order-Flow-Board',
 };

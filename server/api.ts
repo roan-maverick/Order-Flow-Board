@@ -31,7 +31,12 @@ function error(status: number, message: string, extra: Record<string, unknown> =
 }
 
 export function handleApi(path: string, query: URLSearchParams, store: Store, ifNoneMatch?: string): ApiResponse {
-  const parts = path.replace(/^\/api\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  let parts: string[];
+  try {
+    parts = path.replace(/^\/api\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return error(400, 'that address is not valid');
+  }
 
   if (parts.length === 0) {
     return {

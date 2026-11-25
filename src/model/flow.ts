@@ -173,8 +173,12 @@ export interface Flow {
 
 const MIN = 60_000;
 const BAR = 5 * MIN;
-export const FEATURED_PER_SIDE = 3;
-export const STRENGTH_WEIGHTS = { move: 0.45, conviction: 0.35, checks: 0.2 } as const;
+/** Big cards shown on each side of the board. */
+const CARDS_PER_SIDE = 3;
+/** How strength is mixed: 45% size of move, 35% conviction behind it, 20% checks held. */
+const MIX_MOVE = 0.45;
+const MIX_CONVICTION = 0.35;
+const MIX_CHECKS = 0.2;
 
 export const pctOf = (now: number, from: number) => (from > 0 ? ((now - from) / from) * 100 : 0);
 const sign = (x: number | null | undefined, eps = 1e-9): -1 | 0 | 1 => (x == null || Math.abs(x) <= eps ? 0 : x > 0 ? 1 : -1);
@@ -186,11 +190,10 @@ export function median(values: number[]): number {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-function percentile(values: number[], value: number): number {
-  if (values.length <= 1) return 1;
-  let below = 0;
-  for (const v of values) if (v < value) below++;
-  return below / (values.length - 1);
+/** Where `value` ranks among `pool`, from 0 (smallest) to 1 (largest). */
+function rankIn(pool: number[], value: number): number {
+  const others = pool.length - 1;
+  return others > 0 ? pool.filter(x => x < value).length / others : 1;
 }
 
 /** The window's start time for a market file. */
@@ -491,7 +494,7 @@ export function buildFlow(data: MarketData, windowId: WindowId, opts: { symbols?
     });
     // 5. The sector agrees
     checks.push({
-      id: 'sector', label: 'Its sector leans the same way',
+      id: 'sector', label: 'The sector agrees',
       pass: !sectorUsable ? null : sector!.lean === dir,
       note: !sectorUsable ? 'too few names in the sector to say' : `${sector!.label} median ${fmtPct(sector!.changePct)}`,
     });
@@ -541,7 +544,7 @@ export function buildFlow(data: MarketData, windowId: WindowId, opts: { symbols?
     const convs = list.map(conviction);
     for (const a of list) {
       const held = a.checksCounted ? a.checksHeld / a.checksCounted : 0;
-      a.strength = STRENGTH_WEIGHTS.move * percentile(moves, Math.abs(a.changePct)) + STRENGTH_WEIGHTS.conviction * percentile(convs, conviction(a)) + STRENGTH_WEIGHTS.checks * held;
+      a.strength = MIX_MOVE * rankIn(moves, Math.abs(a.changePct)) + MIX_CONVICTION * rankIn(convs, conviction(a)) + MIX_CHECKS * held;
     }
     list.sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct)).forEach((a, i) => { a.rank = i + 1; });
   }
@@ -550,7 +553,7 @@ export function buildFlow(data: MarketData, windowId: WindowId, opts: { symbols?
   const bullish = sideList('bullish');
   const bearish = sideList('bearish');
   const rangebound = sideList('rangebound');
-  const pick = (list: FlowAsset[]) => [...list].filter(a => !a.isBenchmark).sort((a, b) => b.strength - a.strength).slice(0, FEATURED_PER_SIDE);
+  const pick = (list: FlowAsset[]) => [...list].filter(a => !a.isBenchmark).sort((a, b) => b.strength - a.strength).slice(0, CARDS_PER_SIDE);
 
   return {
     market: data.market,

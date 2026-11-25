@@ -164,6 +164,10 @@ describe('API', () => {
     expect(get('/api/flow/forex').status).toBe(404);
   });
 
+  it('answers a malformed address with 400 instead of failing', () => {
+    expect(get('/api/flow/us/%E0%A4%A').status).toBe(400);
+  });
+
   it('answers 304 when the board has not changed', () => {
     const first = get('/api/market/us');
     expect(first.status).toBe(200);
