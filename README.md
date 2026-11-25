@@ -2,7 +2,7 @@
 
 <img src="public/favicon.svg" alt="" width="72" height="72">
 
-# Global Order Flow
+# Global Order Flow.
 
 ### See where the money is flowing across the whole S&P 500 and crypto, live, on one screen.
 
